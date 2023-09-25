@@ -1,0 +1,12 @@
+1. read and analyze auditd log files
+2. Aggregate the result of each rule / command? the same thing?
+3. store the data in a local SQLite database.
+4. repeate the analyzing without analyzing the same logs even when the program is closed and runed again
+    https://stackoverflow.com/questions/5419888/reading-from-a-frequently-updated-file, and current_line or smth.
+5. hanlde multiple logging files (bonus)
+
+logging, try-catch blocks, commenting, configuration files (https://docs.python.org/3/library/configparser.html).
+
+https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/security_guide/chap-system_auditing#doc-wrapper
+
+
