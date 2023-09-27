@@ -4,7 +4,7 @@ import configparser
 import json
 import sys
 import time
-from typing import TextIO
+from typing import TextIO, Dict
 from dataclasses import dataclass
 
 ANALYZER_CONFIG = 'analyzer.ini'
@@ -13,10 +13,28 @@ ANALYZER_CONFIG = 'analyzer.ini'
 
 class Analyzer:
     # don't forget to use @property
-    def __init__():
+    def __init__(self):
         ...
 
-    def follow_log(file: TextIO) -> str:
+    @property
+    def current_file(self):
+        """
+        Returns the current file to read from. 
+        If the analyzer reached the max lines go to the next file
+        """
+        return "/var/log/audit/audit.log"
+    
+    def run(self):
+        """
+        Go through the log files and stores the records into the database
+        """
+        with open(self.current_file, "r") as audit_log:
+            records = self.follow_file(audit_log)
+            
+            for record in records:   
+                logging.debug(self.parse_record(record))
+
+    def follow_file(self, file: TextIO) -> str:
         """
         Reads the file and yield it's lines back to the caller 
         until reached the max lines for a log
@@ -30,11 +48,14 @@ class Analyzer:
             l += 1
             yield line
 
-    def store_record():
+    def store_record(self, ):
         ...
     
-    def parse_record():
-        ...
+    def parse_record(self, record_line: str) -> Dict:
+        """
+        Reads one record and return dictionary with field : value pairs.
+        """
+        return { pair.split('=')[0] : pair.split('=')[1] for pair in record_line.split(' ') }
     
     def save_state():
         # https://docs.python.org/3/library/atexit.html - atexit
@@ -51,26 +72,8 @@ class AnalyzerState:
 
 
 if __name__ == "__main__":
-    
     logging.basicConfig(format="%(levelname)s:%(asctime)s- %(message)s", level=logging.DEBUG)
+    Analyzer().run()
 
-    # config = configparser.ConfigParser()
-    # config.read(ANALYZER_CONFIG)
     
-    # default_config = dict(config['DEFAULT'])
-    # logging.debug(f"defualt config: {json.dumps(default_config)}")
-
-    # try:
-    #     logs_dir = default_config['auditd_logs_path']
-    # except KeyError:
-    #     logging.critical("the configuration is missing some defualt configurations")
-    #     sys.exit(1)
-
-    # with open(f"{logs_dir}/audit.log", "r") as audit_log:
-    #     log_lines = follow(audit_log)
-        
-    #     for line in log_lines:
-            
-    #         entry = json.loads(line) # I will have to build my own parser
-    #         logging.info(entry.dumps())
-    #         logging.info(f"""{entry["event"]:10} {entry["eventTime"]:26} {entry["ownerUserId"]:6} {entry["path"]}""")
+         

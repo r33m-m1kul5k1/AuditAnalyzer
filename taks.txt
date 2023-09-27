@@ -10,3 +10,14 @@ logging, try-catch blocks, commenting, configuration files (https://docs.python.
 https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/security_guide/chap-system_auditing#doc-wrapper
 
 
+# config = configparser.ConfigParser()
+    # config.read(ANALYZER_CONFIG)
+    
+    # default_config = dict(config['DEFAULT'])
+    # logging.debug(f"defualt config: {json.dumps(default_config)}")
+
+    # try:
+    #     logs_dir = default_config['auditd_logs_path']
+    # except KeyError:
+    #     logging.critical("the configuration is missing some defualt configurations")
+    #     sys.exit(1)
