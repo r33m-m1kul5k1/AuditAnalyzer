@@ -6,6 +6,8 @@ import sys
 import sqlite3
 import re
 import pickle
+import os
+import linecache
 from base64 import b64decode, b64encode
 import atexit
 from typing import TextIO, Dict
@@ -13,52 +15,79 @@ from dataclasses import dataclass, field
 
 ANALYZER_CONFIG = 'analyzer.ini'
 
+def load_analyzer_state(path: str):
+    """
+    Loads the analyzer state from the pickled file or creates a new state
+    """
+    try:
+        with open(path, 'rb') as file:
+            state = pickle.load(file)
+    except FileNotFoundError:
+        logging.info('creating a new state object')
+        state = AnalyzerState()
+    return state
 
 
 class Analyzer:
     
     def __init__(self, config):
+        self.config = config
+        self.state = load_analyzer_state(config.analyzer_state_path)
         self.database_conn = sqlite3.connect(config.database_path)
         self.cursor = self.database_conn.cursor()
         
         self.cursor.execute('CREATE TABLE IF NOT EXISTS misc_records(type TEXT, misc_fields TEXT)')
         self.cursor.execute('CREATE TABLE IF NOT EXISTS commands(exe TEXT, grouped_records TEXT)')
         self.cursor.execute('CREATE TABLE IF NOT EXISTS rules(key TEXT, grouped_records TEXT)')
-        
+
     @property
-    def current_file(self):
+    def current_file(self) -> str:
         """
-        Returns the current file to read from. 
+        Returns the current file path to read from. 
         If the analyzer reached the max lines go to the next file
         """
-        return '/var/log/audit/audit.log'
-    
+        log_files = os.listdir(self.config.auditd_logs_path)
+        return f"{self.config.auditd_logs_path}/{log_files[self.state.current_file_index]}"
+          
     def run(self):
         """
         Go through the log files and stores the records into the database
         """
-        with open(self.current_file, 'r') as audit_log:
-            records = self.follow_file(audit_log)
+        
+        logging.debug(f"current state = {self.state}")
+        while True:
+            records = self.follow_file()
             
             for record in records: 
                 record = self.parse_record(record)
                 if record:
                     self.store_record(record)
+            
+            self.state.current_file_index = (self.state.current_file_index + 1) % self.config.num_logs
+            logging.debug(f'moving to {self.current_file}')
+    
 
-    def follow_file(self, file: TextIO) -> str:
+    def follow_file(self) -> str:
         """
         Reads the file and yield it's lines back to the caller 
         until reached the max lines for a log
         """
-        l = 0
-        while True:
-            line = file.readline()
-            if not line:
-                time.sleep(0.1)
-                continue
-            l += 1
-            yield line
+        with open(self.current_file, 'r') as file:
+            file.seek(self.state.current_byte)
 
+            while self.state.current_byte < self.config.max_log_file * 2**20:
+                line = file.readline()
+                if not line:
+                    time.sleep(0.1)
+                    continue
+                yield line
+                self.state.current_byte = file.tell()
+         
+            
+    # finish 
+    # restore to json format
+    # add a def that aggregate record
+    # store for rule
     def store_record(self, record: Dict):
         """
         stores records, and group all commands and rules together
@@ -89,7 +118,7 @@ class Analyzer:
             ...
         
         if 'exe' not in record and 'key' not in record:
-            logging.debug(f'inserting a misc record => {record}')
+            
             self.cursor.execute(
                 'INSERT INTO misc_records VALUES (?, ?)',
                 (
@@ -99,6 +128,7 @@ class Analyzer:
             
         self.database_conn.commit()
     
+    # finish - regex the asfds= or =asdfa and zip them to a dictionary, with findall
     def parse_record(self, record_line: str) -> Dict | None:
         """
         Reads one record and return dictionary with field : value pairs.
@@ -109,15 +139,19 @@ class Analyzer:
             logging.error(f'invalid record => {record_line}')
 
     def save_state(self):
-        # https://docs.python.org/3/library/atexit.html - atexit
-        # https://docs.python.org/2/library/pickle.html#what-can-be-pickled-and-unpickled - save state
+        """
+        Pickles the analyzer state into a temp file and close the database connection
+        """
+        with open(self.config.analyzer_state_path, 'wb') as file:
+            pickle.dump(self.state, file)
         self.database_conn.close()
         logging.debug('saved analyzer state')
 
 @dataclass
 class AnalyzerState:
-    ...
-    # https://gist.github.com/tux-00/6093bfe1b5eef3049a7da493f312c77d
+    current_byte: int = 0
+    current_file_index: int = 0
+
     
 
 @dataclass 
@@ -128,6 +162,9 @@ class Config:
     # audit log file maximum size in megabytes
     max_log_file: int = field(init=False)
     database_path: str = field(init=False)
+    analyzer_state_path: str = field(init=False)
+    # audit maximum number of log files
+    num_logs: int = field(init=False)
 
 
     def __post_init__(self):
@@ -136,8 +173,10 @@ class Config:
 
         try:
             self.auditd_logs_path = config['DEFAULT']['auditd_logs_path']
-            self.max_log_file = config['DEFAULT']['max_log_file']
+            self.max_log_file = int(config['DEFAULT']['max_log_file'])
             self.database_path = config['DEFAULT']['database_path']
+            self.analyzer_state_path = config['DEFAULT']['analyzer_state_path']
+            self.num_logs = int(config['DEFAULT']['num_logs'])
         except KeyError:
             logging.critical('the configuration is missing some defualt configurations')
             sys.exit(1)
