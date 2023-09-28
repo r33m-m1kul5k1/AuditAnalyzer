@@ -120,7 +120,6 @@ class Analyzer:
                 ).fetchone()
             
             if not grouped_records:
-                print(rule_info)
                 self.cursor.execute(
                     'INSERT INTO rules (key, grouped_records) VALUES (?, ?)',
                     (record['key'], json.dumps([rule_info]))
@@ -149,8 +148,9 @@ class Analyzer:
         """
         Reads one record and return dictionary with field : value pairs.
         """
+        record_line = f' {record_line} '
         try:
-            return { pair.split('=')[0] : pair.split('=')[1] for pair in record_line.split(' ') } 
+            return dict(zip(re.findall(' (.*?)=', record_line), re.findall('=(.*?) ', record_line)))
         except:
             logging.error(f'invalid record => {record_line}')
 
