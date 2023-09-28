@@ -7,7 +7,7 @@ import sqlite3
 import re
 import pickle
 import os
-import linecache
+import json
 from base64 import b64decode, b64encode
 import atexit
 from typing import TextIO, Dict
@@ -84,16 +84,13 @@ class Analyzer:
                 self.state.current_byte = file.tell()
          
             
-    # finish 
-    # restore to json format
-    # add a def that aggregate record
-    # store for rule
     def store_record(self, record: Dict):
         """
         stores records, and group all commands and rules together
         """
+
         if 'exe' in record:
-            command_info = {k:record[k] for k in record if k != 'exe' };
+            rule_info = {k:record[k] for k in record if k != 'exe' };
            
             grouped_records = self.cursor.execute(
                 'SELECT grouped_records FROM commands WHERE exe = ?',
@@ -101,21 +98,40 @@ class Analyzer:
                 ).fetchone()
             
             if not grouped_records:
-                print(command_info)
+                print(rule_info)
                 self.cursor.execute(
                     'INSERT INTO commands (exe, grouped_records) VALUES (?, ?)',
-                    (record['exe'], b64encode(pickle.dumps([command_info])).decode())
+                    (record['exe'], json.dumps([rule_info]))
                     )
             else:
-                grouped_records = pickle.loads(b64decode(grouped_records[0]))
-                grouped_records.append(command_info)
+                grouped_records = json.loads(grouped_records[0])
+                grouped_records.append(rule_info)
                 self.cursor.execute(
                     'UPDATE commands SET grouped_records = ?',
-                        (b64encode(pickle.dumps(grouped_records)),)
+                        (json.dumps(grouped_records),)
                     )
 
-        if 'key' in record:
-            ...
+        if 'key' in record and record['key'] != '(nil)':
+            rule_info = {k:record[k] for k in record if k != 'key' };
+           
+            grouped_records = self.cursor.execute(
+                'SELECT grouped_records FROM rules WHERE key = ?',
+                (record['key'],)
+                ).fetchone()
+            
+            if not grouped_records:
+                print(rule_info)
+                self.cursor.execute(
+                    'INSERT INTO rules (key, grouped_records) VALUES (?, ?)',
+                    (record['key'], json.dumps([rule_info]))
+                    )
+            else:
+                grouped_records = json.loads(grouped_records[0])
+                grouped_records.append(rule_info)
+                self.cursor.execute(
+                    'UPDATE rules SET grouped_records = ?',
+                        (json.dumps(grouped_records),)
+                    )
         
         if 'exe' not in record and 'key' not in record:
             
