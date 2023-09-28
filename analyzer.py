@@ -8,7 +8,6 @@ import re
 import pickle
 import os
 import json
-from base64 import b64decode, b64encode
 import atexit
 from typing import TextIO, Dict
 from dataclasses import dataclass, field
@@ -98,7 +97,6 @@ class Analyzer:
                 ).fetchone()
             
             if not grouped_records:
-                print(rule_info)
                 self.cursor.execute(
                     'INSERT INTO commands (exe, grouped_records) VALUES (?, ?)',
                     (record['exe'], json.dumps([rule_info]))
@@ -138,12 +136,12 @@ class Analyzer:
                 'INSERT INTO misc_records VALUES (?, ?)',
                 (
                     record['type'],
-                    b64encode(pickle.dumps({k:record[k] for k in record if k != 'type' }), )
+                    json.dumps({k:record[k] for k in record if k != 'type' }, )
                     ))
             
         self.database_conn.commit()
     
-    # finish - regex the asfds= or =asdfa and zip them to a dictionary, with findall
+
     def parse_record(self, record_line: str) -> Dict | None:
         """
         Reads one record and return dictionary with field : value pairs.
